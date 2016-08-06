@@ -1,0 +1,342 @@
+#!/usr/bin/env perl 
+#
+# AGI script that interfaces Asterisk PBX to Alexa
+#
+# This program is free software, distributed under the terms of
+# the GNU General Public License Version 2. 
+#
+# ----
+# Install
+# ----
+# Set up Asterisk PBX for Raspberry
+#
+# Add an entry for AVS extensions.conf  (use any extension #)
+# exten => 5555,n(record),agi(alexa.agi,en-US)
+# exten => 5555,n,goto(record)
+#
+# SETUP OR UPDATES
+# $ bash ./install.sh
+#
+# Set up Amazon AVS and authentication as per
+# https://github.com/amzn/alexa-avs-raspberry-pi
+# (ignore anything related to Java)
+# (execute token.pl ) 
+#
+# DEBUG
+# sudo asterisk -r
+# agi set debug on
+# core set verbose 4
+#
+# -----
+# Usage
+# -----
+# agi(alexa.agi,[lang],[timeout],[intkey],[NOBEEP])
+#
+# Records from the current channel until 2 seconds of silence are detected
+# (controlled by the 'timeout' argument, -1 for no timeout) or the
+# interrupt key (# by default) is pressed. 
+#
+# If NOBEEP is set, no beep sound is played
+# back to the user to indicate the start of the recording.
+#
+# The recorded sound is send over to Amazon Alexa Voice Service AVS and the
+# returned audio is placed into a temp file and played back.
+#
+#
+# User defined parameters:
+# Alexa parameters
+#
+# Default language: (currently always en-us)
+#       $language
+#
+# Default timeout:
+#	$timeout (value in seconds of silence before recording is stopped)
+#
+# Default interupt key:
+#	$intkey (can be any digit from 0 to 9 or # and *, or "any" )
+#
+# IMPORTANT
+# Amazon Authentication refresh token is set by a separate program prior to 
+# its expiration using the access token and keys in the /tmp/token.avs file
+# Without this, this program will not be able to log into Amazon successfully
+# 
+
+use warnings;
+use strict;
+use URI::Escape;
+use File::Copy qw(move);
+use File::Temp qw(tempfile);
+use Encode qw(encode);
+
+$| = 1;
+
+# ----------------------------- #
+#   User defined parameters:    #
+# ----------------------------- #
+# Default language (future)     # 
+my $language = "en-us";
+
+# Default max silence timeout   #
+my $timeout = 2;
+
+# Absolute Recording timeout    #
+my $abs_timeout = -1;
+
+# Default interrupt key         #
+my $intkey = "#";
+
+# Input audio sample rate       #
+my $samplerate = "8000";
+
+# Verbose debugging messages    #
+my $debug = 1;
+
+# ----------------------------- #
+
+my %AGI;
+my $ua;
+my $fh;
+my $tmpname;
+my @result;
+my $name;
+my $audio;
+my $uarequest;
+my $uaresponse;
+my %response;
+my $endian;
+my $silence;
+my $filetype;
+my $json;
+my $results    = 1;
+my $beep       = "BEEP";
+my $comp_level = -8;
+my $ua_timeout = 10;
+#my $tmpdir     = "/var/spool/asterisk/tmp";
+my $tmpdir     = "/tmp";
+my $sox        = "/usr/bin/sox";
+my $format     = "sln";
+my $host       = "access-alexa-na.amazon.com";
+my $url        = "https://$host/v1/avs/speechrecognizer/recognize";
+#my $host       = "localhost";
+#my $url        = "http://$host:8123/v1/avs/speechrecognizer/recognize";
+my $token_file = "$tmpdir/token.avs";
+my $token;
+my $avs_dir    = "/etc";
+my $avs_json_file = "$avs_dir/avs_audio.json";
+my $thank	= "/usr/share/asterisk/sounds/en/auth-thankyou";
+
+# Store AGI input #
+($AGI{arg_1}, $AGI{arg_2}, $AGI{arg_3}, $AGI{arg_4}) = @ARGV;
+while (<STDIN>) {
+	chomp;
+	last if (!length);
+	$AGI{$1} = $2 if (/^agi_(\w+)\:\s+(.*)$/);
+}
+
+$name = " -- $AGI{request}:";
+console_log ("Starting...") if ($debug);
+
+# Setting language, timeout, interrupt keys and BEEP indication #
+if (length($AGI{arg_1})) {
+	$language = $AGI{arg_1} if ($AGI{arg_1} =~ /^[a-z]{2}(-[a-zA-Z]{2,6})?$/);
+}
+
+if (length($AGI{arg_2})) {
+	if ($AGI{arg_2} == -1) {
+		$silence = "";
+	} elsif ($AGI{arg_2} =~ /^\d+$/) {
+		$silence = "s=$AGI{arg_2}";
+	} else {
+		$silence = "s=$timeout";
+	}
+} else {
+	$silence = "s=$timeout";
+}
+
+if (length($AGI{arg_3})) {
+	$intkey = "0123456789#*" if ($AGI{arg_3} eq "any");
+	$intkey = $AGI{arg_3} if ($AGI{arg_3} =~ /^[0-9*#]+$/);
+}
+
+if (length($AGI{arg_4})) {
+	$beep = "" if ($AGI{arg_4} eq "NOBEEP");
+}
+
+# Answer channel if not already answered #
+console_log ("Checking channel status.") if ($debug);
+print "CHANNEL STATUS\n";
+@result = checkresponse();
+if ($result[0] == 4) {
+	console_log ("Answering channel.") if ($debug);
+	print "ANSWER\n";
+	@result = checkresponse();
+	if ($result[0] != 0) {
+		die "$name Failed to answer channel.\n";
+	}
+}
+
+# Get Amazon AVS Token
+open($fh, "<", "$token_file") or die "Can't read $token_file: $!";
+$token = do { local $/; <$fh> };
+close($fh);
+chomp($token);
+if ($token eq "") {
+	console_log ("No token in $token_file."); 
+	die "No token in $token_file.\n"; 
+}
+console_log ("Got AVS token.") if ($debug);
+
+# Handle interrupts 
+$SIG{'INT'} = \&int_handler;
+$SIG{'HUP'} = \&int_handler;
+
+# Record request audiofile 
+#($fh, $tmpname) = tempfile("avs_audio", DIR => $tmpdir, UNLINK => 1);
+$tmpname = "$tmpdir/avs_audio$$";
+console_log ("RECORD FILE $tmpname $format $intkey $abs_timeout $beep $silence") if ($debug);
+print "RECORD FILE $tmpname $format \"$intkey\" \"$abs_timeout\" $beep \"$silence\"\n";
+@result = checkresponse();
+die "$name Failed to record file, aborting...\n" if ($result[0] == -1);
+
+# End recording
+console_log ("Playing $thank") if ($debug);
+my $res = playback($thank, $intkey);
+        die if ($res < 0);
+
+# Encode sln audio file to wav
+console_log ("Converting $sox $tmpname.$format.") if ($debug);
+system($sox, "$tmpname.$format", "-e", "signed-integer", "-b", "16", "-r", "16000", "$tmpname.wav") == 0 or die "$name $sox failed: $?\n";
+
+# Building JSON 
+console_log ("Adding $avs_json_file to POST.") if ($debug);
+open($fh, "<", "$avs_json_file") or die "Can't read $avs_json_file: $!";
+$json = do { local $/; <$fh> };
+close($fh);
+
+# Append audio data to json 
+console_log ("Appending $tmpname.wav to POST.") if ($debug);
+open($fh, "<", "$tmpname.wav") or die "Can't read file: $!";
+$audio = do { local $/; <$fh> };
+close($fh);
+$json .= $audio;
+
+# Append Closing to json
+$json .= "\n--A1234567890--";
+
+console_log ("Preparing $tmpname.dat HTTP POST FILE.") if ($debug);
+open($fh, ">", "$tmpname.dat") or die "Can't write file $tmpname.dat: $!";
+print $fh $json;
+close($fh);
+
+# Send POST Request
+console_log ("Sending HTTP POST to AVS.") if ($debug);
+my $cmd = "/usr/bin/curl -o \"/tmp/response.dat\" -L -v -H \"Content-Type: multipart/form-data; boundary=A1234567890\" -H \"Authorization: Bearer $token\" --data-binary \@$tmpname.dat $url\n";
+
+open($fh, ">", "/tmp/request.dat") or die "Can't write file /tmp/request.dat: $!";
+print $fh "$cmd";
+close($fh);
+console_log ("See Request /tmp/request.dat") if ($debug);
+
+#system ("$cmd");
+my $status = qx/$cmd/;
+
+open($fh,"/tmp/response.dat");
+$uaresponse = do { local $/; <$fh> };
+close($fh);
+
+console_log ("See Response /tmp/response.dat") if ($debug);
+
+# Receive HTTP Response
+if ($uaresponse !~ "mpeg") {
+	print "VERBOSE \"Unable to get AVS response data.\" 3\n";
+	checkresponse();
+	die "$name Unable to get AVS response data.\n";
+}
+console_log ("Got good AVS response.") if ($debug);
+
+# PARSE RESPONSE for MP3 audio
+my ($header, $body) = split(/mpeg\r\n\r\n/, $uaresponse);
+$audio = $body; # TODO remove trailing msg from body;
+		# TODO Cheating by not parsing the message body but it works
+
+console_log ("Parsing audio to $tmpname.mp3") if ($debug);
+open($fh, ">", "$tmpname.mp3") or die "Can't write file $tmpname.mp3: $!";
+print $fh "$audio";
+close($fh);
+
+# Convert mp3 file to 8khz sln
+console_log ("Converting mp3 to $tmpname.sln") if ($debug);
+$cmd = "sox \"$tmpname.mp3\" -t raw -r 8k -s -2 -c 1 \"$tmpname.sln\"\n";
+my $status = qx/$cmd/; 
+
+# PLAY RESPONSE
+console_log ("Playing $tmpname") if ($debug);
+my $res = playback($tmpname, $intkey);
+        die if ($res < 0);
+
+# Cache cleanup 
+unlink "$tmpname.wav";
+unlink "$tmpname.mp3";
+unlink "$tmpname.$format";
+
+exit;
+
+
+#------------------------------------------
+
+
+
+sub checkresponse {
+	my $input = <STDIN>;
+	my @values;
+
+	chomp $input;
+	if ($input =~ /^200 result=(-?\d+)\s?(.*)$/) {
+		warn ("Command returned: $input\n") if ($debug);
+		@values = ("$1", "$2");
+	} else {
+		$input .= <STDIN> if ($input =~ /^520-Invalid/);
+		warn ("Unexpected result: $input\n");
+		@values = (-1, -1);
+	}
+	return @values;
+}
+
+
+sub int_handler {
+	die "$name Interrupt signal received, terminating...\n";
+}
+
+sub playback {
+        my ($file, $keys) = @_;
+        my @response;
+
+        print "STREAM FILE $file \"$keys\"\n";
+        @response = checkresponse();
+        if ($response[0] >= 32 && chr($response[0]) =~ /[\w*#]/) {
+                console_log("Got digit chr($response[0])") if ($debug);
+                print "SET EXTENSION ", chr($response[0]), "\n";
+                checkresponse();
+                print "SET PRIORITY 1\n";
+                checkresponse();
+        } elsif ($response[0] == -1) {
+                console_log("Failed to play $file.");
+        }
+        return $response[0];
+}
+
+sub console_log {
+        foreach my $message (@_) {
+                warn "$name $message\n";
+                print "NOOP \"$name $message\"\n";
+                checkresponse();
+        }
+}
+
+
+END {
+	if ($tmpname) {
+		console_log ("Cleaning temp files.") if ($debug);
+		#unlink glob "$tmpname.*";
+	}
+}

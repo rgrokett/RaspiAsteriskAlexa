@@ -1,0 +1,9 @@
+--A1234567890
+Content-Disposition: form-data; name="file"; filename="request"
+Content-Type: application/json; charset=UTF-8
+
+{"messageBody": {"profile": "alexa-close-talk", "locale": "en-us", "format": "audio/L16; rate=16000; channels=1"}, "messageHeader": {"deviceContext": [{"namespace": "AudioPlayer", "name": "playbackState", "payload": {"playerActivity": "IDLE", "offsetInMilliseconds": "0", "streamId": ""}}]}}
+--A1234567890
+Content-Disposition: form-data; name="file"; filename="audio"
+Content-Type: audio/L16; rate=16000; channels=1
+

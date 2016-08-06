@@ -1,0 +1,10 @@
+alexa.agi		-- AGI Interface from Asterisk to Alexa Voice API
+alexa_another.sln	-- Audio prompt file
+alexa_example.sln	-- Audio prompt file
+alexa_hello.sln		-- Audio prompt file
+avs_audio.json		-- JSON Header for Alexa message
+extensions.conf		-- Snip of Asterisk config for Alexa
+install.sh		-- Simplistic installation script
+token.pl		-- Perl pgm to retrieve AWS access token for alexa.agi
+grant_token.sh		-- cURL cmd to grant access to AWS Alexa
+
