@@ -19,7 +19,7 @@ sudo apt-get -y install sox
 sudo apt-get -y install libsox-fmt-mp3
 sudo apt-get -y install libwww-perl libjson-perl
 sudo apt-get -y install flac
-sudo curl -L http://cpanmin.us | perl - --sudo App::cpanminus
+sudo curl -L https://cpanmin.us | perl - --sudo App::cpanminus
 sudo cpanm IO::Socket::SSL --force
 sudo perl -MCPAN -e 'install JSON'
 sudo apt-get -y install libjson-pp-perl
