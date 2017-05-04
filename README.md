@@ -4,6 +4,8 @@ Integrating Asterisk with Amazon Alexa Voice Service on a Raspberry Pi Zero usin
 Important Note: This can only be used as a proof-of-concept. It currently does not meet the Amazon Voice Service Agreement for Public or Commercial application. See https://developer.amazon.com/edw/avs_agreement.html for more details.  
 It does meet requirements for home or experimental (private) use. To keep it private, the Asterisk configuration files here default to an internal Asterisk extension only.
 
+Also available: Google Voice Assistant running on Asterisk PBX on a Pi.  https://github.com/rgrokett/RaspiAsteriskGoogle
+
 # Overview
 This requires an account with Amazon and Amazon Voice Services:
 https://developer.amazon.com/public/solutions/alexa/alexa-voice-service
