@@ -6,6 +6,8 @@ It does meet requirements for home or experimental (private) use. To keep it pri
 
 Also available: Google Voice Assistant running on Asterisk PBX on a Pi.  https://github.com/rgrokett/RaspiAsteriskGoogle
 
+Note that Amazon changes SDK and security req often, may cause issues here.
+
 # Overview
 This requires an account with Amazon and Amazon Voice Services:
 https://developer.amazon.com/public/solutions/alexa/alexa-voice-service
