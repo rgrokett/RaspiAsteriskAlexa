@@ -8,10 +8,11 @@ Also available: Google Voice Assistant running on Asterisk PBX on a Pi.  https:/
 
 Note that Amazon changes SDK and security req often, may cause issues here.
 
-2021 Update: Incredible PBX for Asterisk has added this feature and updated for easier installation! 
+---
+**2021 Update:** Incredible PBX for Asterisk has added this feature and updated for easier installation!
 Go to: 
 https://nerdvittles.com/amazons-alexa-now-available-for-incredible-pbx-2020/
-
+---
 
 # Overview
 This requires an account with Amazon and Amazon Voice Services:
