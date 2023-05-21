@@ -1,12 +1,17 @@
 # RaspiAsteriskAlexa
 Integrating Asterisk with Amazon Alexa Voice Service on a Raspberry Pi Zero using AGI
 
-Important Note: This can only be used as a proof-of-concept. It currently does not meet the Amazon Voice Service Agreement for Public or Commercial application. See https://developer.amazon.com/edw/avs_agreement.html for more details.  
+Important Note: This can only be used as a proof-of-concept. It currently does not meet the Amazon Voice Service Agreement for Public or Commercial application. See https://developer.amazon.com/support/legal/alexa/alexa-voice-service/terms-and-agreements for more details.  
 It does meet requirements for home or experimental (private) use. To keep it private, the Asterisk configuration files here default to an internal Asterisk extension only.
 
 Also available: Google Voice Assistant running on Asterisk PBX on a Pi.  https://github.com/rgrokett/RaspiAsteriskGoogle
 
 Note that Amazon changes SDK and security req often, may cause issues here.
+
+2021 Update: Incredible PBX for Asterisk has added this feature and updated for easier installation! 
+Go to: 
+https://nerdvittles.com/amazons-alexa-now-available-for-incredible-pbx-2020/
+
 
 # Overview
 This requires an account with Amazon and Amazon Voice Services:
@@ -18,7 +23,7 @@ Also required is:
 + A bunch of packages (see the Installation document in Github)
 + The files from Github
 + Your Voice Service authorized in Amazon Voice Services
-+ https://developer.amazon.com/public/solutions/alexa/alexa-voice-service/docs/authorizing-your-alexa-enabled-product-from-a-website
++ https://developer.amazon.com/en-US/docs/alexa/alexa-voice-service/authorize-cbl.html
 + (This solution uses Amazon Implicit Grant method of authentication so follow only its steps.)
   
 Note that the Amazon Authorization is the most complicated part of this project. See Installation doc for details.
