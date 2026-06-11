@@ -1,4 +1,24 @@
+#!/usr/bin/env bash
 
+set -euo pipefail
 
-curl -L -H "application/x-www-form-urlencoded" -d 'grant_type=authorization_code&code=YOURTOKEN&client_id=YOURCLIENTID&client_secret=YOURCLIENTSECRET&redirect_uri=https%3A%2F%2Flocalhost' https://api.amazon.com/auth/o2/token
+readonly TOKEN_HELPER="${TOKEN_HELPER:-/usr/local/libexec/asterisk-alexa/token.pl}"
+readonly CONFIG_FILE="${ALEXA_CONFIG:-/etc/asterisk/alexa.conf}"
 
+if [[ $# -ne 0 ]]; then
+    printf 'Usage: %s\n' "$0" >&2
+    exit 64
+fi
+
+read -r -s -p 'Authorization code: ' authorization_code
+printf '\n'
+
+if [[ -z "$authorization_code" ]]; then
+    printf 'Authorization code cannot be empty.\n' >&2
+    exit 64
+fi
+
+printf '%s\n' "$authorization_code" |
+    sudo "$TOKEN_HELPER" \
+        --config "$CONFIG_FILE" \
+        --exchange-code

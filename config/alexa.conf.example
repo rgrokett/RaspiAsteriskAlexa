@@ -1,0 +1,17 @@
+# Install as /etc/asterisk/alexa.conf with mode 0640 and owner root:asterisk.
+# Do not commit real credential values.
+client_id=
+client_secret=
+refresh_token=
+
+# Must match the return URL configured in Login with Amazon.
+redirect_uri=https://localhost
+
+# The original proof-of-concept endpoint. Amazon may change or retire it.
+avs_url=https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize
+oauth_url=https://api.amazon.com/auth/o2/token
+
+cache_dir=/var/cache/asterisk-alexa
+refresh_margin_seconds=300
+http_timeout_seconds=30
+metadata_file=/etc/asterisk/avs_audio.json
